@@ -99,6 +99,7 @@ app.post("/webhook", function(req, res) {
       var timeOfEvent = pageEntry.time;
       // Iterate over each messaging event
       pageEntry.messaging.forEach(function(messagingEvent) {
+        console.log("I HAVE THIS MESSAGING EVENT", messagingEvent);
         if (messagingEvent.optin) {
           receivedAuthentication(messagingEvent);
         } else if (messagingEvent.message) {
@@ -244,21 +245,21 @@ async function receivedMessage(event) {
   );
   console.log(JSON.stringify(message));
 
-  var isEcho = message.is_echo;
-  var messageId = message.mid;
-  var appId = message.app_id;
-  var metadata = message.metadata;
+  const isEcho = message.is_echo;
+  const messageId = message.mid;
+  const appId = message.app_id;
+  const metadata = message.metadata;
 
   // You may get a text or attachment but not both
-  var messageText = message.text;
-  var messageAttachments = message.attachments;
-  var quickReply = message.quick_reply;
+  const messageText = message.text;
+  const messageAttachments = message.attachments;
+  const quickReply = message.quick_reply;
 
   const survey = await session.get(event);
-
+  console.log("DUDE WHAT IS THIS", survey);
   const nextQuestion = await session.nextQuestion(event, survey);
 
-  console.log("GOT YOU BITCH", survey);
+  console.log("GOT YOU BITCH", nextQuestion);
 
   if (isEcho) {
     // Just logging message echoes to console
@@ -276,8 +277,8 @@ async function receivedMessage(event) {
       messageId,
       quickReplyPayload
     );
-
-    sendTextMessage(senderID, "Quick reply tapped");
+    receivedPostback(event, quickReplyPayload);
+    //sendTextMessage(senderID, "Quick reply tapped");
     return;
   }
 
@@ -349,7 +350,8 @@ async function receivedMessage(event) {
         break;
 
       default:
-        sendTextMessage(senderID, messageText);
+        //sendTextMessage(senderID, messageText);
+        setQuestion(senderID, nextQuestion);
     }
   } else if (messageAttachments) {
     sendTextMessage(senderID, "Message with attachment received");
@@ -390,14 +392,20 @@ function receivedDeliveryConfirmation(event) {
  * https://developers.facebook.com/docs/messenger-platform/webhook-reference/postback-received
  *
  */
-function receivedPostback(event) {
+async function receivedPostback(event, quickreply) {
   var senderID = event.sender.id;
   var recipientID = event.recipient.id;
   var timeOfPostback = event.timestamp;
 
   // The 'payload' param is a developer-defined field which is set in a postback
   // button for Structured Messages.
-  var payload = event.postback.payload;
+  var payload = quickreply || (event.postback || {}).payload;
+
+  let survey = await session.get(event);
+  console.log("DUDE WHAT IS THIS", survey);
+  survey = await session.setReply(survey, payload);
+
+  const nextQuestion = await session.nextQuestion(event, survey);
 
   console.log(
     "Received postback for user %d and page %d with payload '%s' " + "at %d",
@@ -409,7 +417,8 @@ function receivedPostback(event) {
 
   // When a postback is called, we'll send a message back to the sender to
   // let them know it was successful
-  sendTextMessage(senderID, "Postback called");
+  // sendTextMessage(senderID, "Postback called");
+  setQuestion(senderID, nextQuestion);
 }
 
 /*
@@ -913,6 +922,18 @@ function sendAccountLinking(recipientId) {
         }
       }
     }
+  };
+
+  callSendAPI(messageData);
+}
+
+function setQuestion(recipientId, message) {
+  console.log("I HATE YOU", message);
+  const messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: message
   };
 
   callSendAPI(messageData);
